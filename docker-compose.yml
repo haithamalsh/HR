@@ -1,0 +1,47 @@
+version: '3.8'
+services:
+  asset-service:
+    build: ./services/asset-service
+    ports:
+      - "4001:4001"
+    networks:
+      - imap-net
+  api-gateway:
+    build: ./services/api-gateway
+    ports:
+      - "3000:3000"
+    depends_on:
+      - asset-service
+    networks:
+      - imap-net
+  inventory-service:
+    build: ./services/inventory-service
+    ports:
+      - "4002:4002"
+    networks:
+      - imap-net
+    depends_on:
+      - postgres
+    depends_on:
+      - postgres
+
+postgres:
+  image: postgres:15-alpine
+  environment:
+    POSTGRES_USER: imap
+    POSTGRES_PASSWORD: imappass
+    POSTGRES_DB: imap_db
+  volumes:
+      - 'C:/Users/Elite/.docker/postgres-data:/var/lib/postgresql/data'
+  ports:
+    - "5432:5432"
+  networks:
+    - imap-net
+
+networks:
+  imap-net:
+    driver: bridge
+
+volumes:
+  # Uncomment to use a named volume for Postgres data instead of a host bind
+  # postgres-data: {}

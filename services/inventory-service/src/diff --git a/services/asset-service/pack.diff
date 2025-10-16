@@ -1,0 +1,839 @@
+diff --git a/services/asset-service/package.json b/services/asset-service/package.json
+new file mode 100644
+--- /dev/null
++++ b/services/asset-service/package.json
+@@ -0,0 +1,27 @@
++{
++  "name": "asset-service",
++  "version": "0.1.0",
++  "private": true,
++  "main": "dist/index.js",
++  "scripts": {
++  "start": "ts-node src/index.ts",
++  "build": "tsc",
++    "test": "jest --runInBand"
++  },
++  "dependencies": {
++    "cors": "^2.8.5",
++    "express": "^4.18.2",
++    "node-fetch": "^2.6.7"
++  },
++  "devDependencies": {
++    "@types/express": "^4.17.17",
++    "@types/jest": "^29.5.3",
++    "@types/node": "^20.4.2",
++    "jest": "^29.6.1",
++    "supertest": "^6.3.3",
++    "ts-jest": "^29.1.0",
++    "ts-node": "^10.9.1",
++    "typescript": "^5.1.6"
++  }
++}
+diff --git a/services/asset-service/tsconfig.json b/services/asset-service/tsconfig.json
+new file mode 100644
+--- /dev/null
++++ b/services/asset-service/tsconfig.json
+@@ -0,0 +1,12 @@
++{
++  "compilerOptions": {
++    "target": "ES2020",
++    "module": "CommonJS",
++    "outDir": "dist",
++    "rootDir": "src",
++    "strict": true,
++    "esModuleInterop": true,
++    "skipLibCheck": true
++  }
++}
+diff --git a/services/asset-service/src/index.ts b/services/asset-service/src/index.ts
+new file mode 100644
+--- /dev/null
++++ b/services/asset-service/src/index.ts
+@@ -0,0 +1,40 @@
++import express from 'express';
++import cors from 'cors';
++
++type Asset = {
++  id: string;
++  name: string;
++  status: 'OPERATIONAL' | 'MAINTENANCE' | 'DECOMMISSIONED';
++  location?: string;
++};
++
++const app = express();
++app.use(cors());
++app.use(express.json());
++
++const assets: Asset[] = [
++  { id: 'a1', name: 'CNC Lathe', status: 'OPERATIONAL', location: 'Plant A' },
++  { id: 'a2', name: '3D Printer', status: 'MAINTENANCE', location: 'Plant B' }
++];
++
++app.get('/assets', (req, res) => {
++  res.json(assets);
++});
++
++app.get('/assets/:id', (req, res) => {
++  const asset = assets.find(a => a.id === req.params.id);
++  if (!asset) return res.status(404).json({ message: 'Not found' });
++  res.json(asset);
++});
++
++app.post('/assets', (req, res) => {
++  const { name, location } = req.body;
++  if (!name) return res.status(400).json({ message: 'name required' });
++  const newAsset: Asset = { id: `a${Date.now()}`, name, status: 'OPERATIONAL', location };
++  assets.push(newAsset);
++  res.status(201).json(newAsset);
++});
++
++const port = process.env.PORT || 4001;
++app.listen(port, () => console.log(`asset-service listening on ${port}`));
+diff --git a/services/asset-service/src/index.test.ts b/services/asset-service/src/index.test.ts
+new file mode 100644
+--- /dev/null
++++ b/services/asset-service/src/index.test.ts
+@@ -0,0 +1,41 @@
++import request from 'supertest';
++import express from 'express';
++import cors from 'cors';
++
++const createApp = () => {
++  const app = express();
++  app.use(cors());
++  app.use(express.json());
++  const assets = [
++    { id: 'a1', name: 'CNC Lathe', status: 'OPERATIONAL', location: 'Plant A' }
++  ];
++  app.get('/assets', (req, res) => res.json(assets));
++  app.get('/assets/:id', (req, res) => {
++    const asset = assets.find((a:any) => a.id === req.params.id);
++    if (!asset) return res.status(404).json({ message: 'Not found' });
++    res.json(asset);
++  });
++  return app;
++};
++
++describe('asset-service', () => {
++  const app = createApp();
++  it('lists assets', async () => {
++    const res = await request(app).get('/assets');
++    expect(res.status).toBe(200);
++    expect(Array.isArray(res.body)).toBe(true);
++    expect(res.body[0].id).toBe('a1');
++  });
++
++  it('gets asset by id', async () => {
++    const res = await request(app).get('/assets/a1');
++    expect(res.status).toBe(200);
++    expect(res.body.name).toBe('CNC Lathe');
++  });
++
++  it('returns 404 for missing asset', async () => {
++    const res = await request(app).get('/assets/missing');
++    expect(res.status).toBe(404);
++  });
++});
+diff --git a/services/api-gateway/package.json b/services/api-gateway/package.json
+new file mode 100644
+--- /dev/null
++++ b/services/api-gateway/package.json
+@@ -0,0 +1,28 @@
++{
++  "name": "api-gateway",
++  "version": "0.1.0",
++  "private": true,
++  "main": "dist/index.js",
++  "scripts": {
++    "start": "ts-node src/main.ts",
++    "build": "tsc -p tsconfig.build.json"
++  },
++  "dependencies": {
++    "@nestjs/common": "^10.0.0",
++    "@nestjs/core": "^10.0.0",
++    "@nestjs/platform-express": "^10.0.0",
++    "http-proxy-middleware": "^2.0.6",
++    "reflect-metadata": "^0.1.13",
++    "rxjs": "^7.8.1"
++  },
++  "scripts": {
++    "start": "ts-node src/main.ts",
++    "build": "tsc -p tsconfig.build.json"
++  },
++  "devDependencies": {
++    "@types/node": "^20.4.2",
++    "ts-node": "^10.9.1",
++    "typescript": "^5.1.6"
++  }
++}
+diff --git a/services/api-gateway/tsconfig.json b/services/api-gateway/tsconfig.json
+new file mode 100644
+--- /dev/null
++++ b/services/api-gateway/tsconfig.json
+@@ -0,0 +1,12 @@
++{
++  "compilerOptions": {
++    "target": "ES2020",
++    "module": "CommonJS",
++    "outDir": "dist",
++    "rootDir": "src",
++    "strict": true,
++    "esModuleInterop": true,
++    "skipLibCheck": true
++  }
++}
+diff --git a/services/api-gateway/src/index.ts b/services/api-gateway/src/index.ts
+new file mode 100644
+--- /dev/null
++++ b/services/api-gateway/src/index.ts
+@@ -0,0 +1,21 @@
++import express from 'express';
++import cors from 'cors';
++import { createProxyMiddleware } from 'http-proxy-middleware';
++
++const app = express();
++app.use(cors());
++app.use(express.json());
++
++// Proxy /api/assets to asset-service at http://localhost:4001
++app.use('/api/assets', createProxyMiddleware({
++  target: 'http://localhost:4001',
++  changeOrigin: true,
++  pathRewrite: { '^/api/assets': '/assets' }
++}));
++
++// health
++app.get('/health', (req, res) => res.json({ status: 'ok' }));
++
++const port = process.env.PORT || 3000;
++app.listen(port, () => console.log(`api-gateway listening on ${port}`));
+diff --git a/services/inventory-service/package.json b/services/inventory-service/package.json
+new file mode 100644
+--- /dev/null
++++ b/services/inventory-service/package.json
+@@ -0,0 +1,30 @@
++{
++  "name": "inventory-service",
++  "version": "0.1.0",
++  "private": true,
++  "main": "dist/main.js",
++  "scripts": {
++    "start": "ts-node src/main.ts",
++    "start:dev": "ts-node-dev --respawn --transpile-only src/main.ts",
++    "build": "tsc -p tsconfig.json",
++    "prisma:generate": "prisma generate",
++    "prisma:migrate": "prisma migrate dev --name init"
++  },
++  "dependencies": {
++    "@nestjs/common": "^10.0.0",
++    "@nestjs/core": "^10.0.0",
++    "@nestjs/platform-express": "^10.0.0",
++    "@prisma/client": "^5.9.0",
++    "reflect-metadata": "^0.1.13",
++    "rxjs": "^7.8.1"
++    ,"pg": "^8.11.0"
++  },
++  "devDependencies": {
++    "@types/node": "^20.4.2",
++    "prisma": "^5.9.0",
++    "ts-node": "^10.9.1",
++    "ts-node-dev": "^2.0.0",
++    "typescript": "^5.1.6"
++  }
++}
+diff --git a/services/inventory-service/tsconfig.json b/services/inventory-service/tsconfig.json
+new file mode 100644
+--- /dev/null
++++ b/services/inventory-service/tsconfig.json
+@@ -0,0 +1,12 @@
++{
++  "compilerOptions": {
++    "target": "ES2020",
++    "module": "CommonJS",
++    "outDir": "dist",
++    "rootDir": "src",
++    "strict": true,
++    "esModuleInterop": true,
++    "skipLibCheck": true
++  }
++}
+diff --git a/services/inventory-service/src/index.ts b/services/inventory-service/src/index.ts
+new file mode 100644
+--- /dev/null
++++ b/services/inventory-service/src/index.ts
+@@ -0,0 +1,31 @@
++import express from 'express';
++import cors from 'cors';
++
++const app = express();
++app.use(cors());
++app.use(express.json());
++
++type InventoryItem = {
++  id: string;
++  name: string;
++  quantity: number;
++  minLevel?: number;
++};
++
++const items: InventoryItem[] = [
++  { id: 'i1', name: 'Bearing', quantity: 150, minLevel: 20 },
++  { id: 'i2', name: 'Belt', quantity: 40, minLevel: 10 }
++];
++
++app.get('/inventory', (req, res) => res.json(items));
++app.post('/inventory/items', (req, res) => {
++  const { name, quantity, minLevel } = req.body;
++  if (!name) return res.status(400).json({ message: 'name required' });
++  const newItem = { id: `i${Date.now()}`, name, quantity: quantity || 0, minLevel };
++  items.push(newItem);
++  res.status(201).json(newItem);
++});
++
++const port = process.env.PORT || 4002;
++app.listen(port, () => console.log(`inventory-service listening on ${port}`));
+diff --git a/frontend/package.json b/frontend/package.json
+new file mode 100644
+--- /dev/null
++++ b/frontend/package.json
+@@ -0,0 +1,11 @@
++{
++  "name": "imap-frontend",
++  "version": "0.1.0",
++  "private": true,
++  "dependencies": {
++    "react": "^18.2.0",
++    "react-dom": "^18.2.0",
++    "axios": "^1.4.0"
++  }
++}
+diff --git a/frontend/src/AssetsList.tsx b/frontend/src/AssetsList.tsx
+new file mode 100644
+--- /dev/null
++++ b/frontend/src/AssetsList.tsx
+@@ -0,0 +1,40 @@
++import React, { useEffect, useState } from 'react';
++import axios from 'axios';
++
++export type Asset = {
++  id: string;
++  name: string;
++  status: string;
++  location?: string;
++};
++
++export const AssetsList: React.FC = () => {
++  const [assets, setAssets] = useState<Asset[]>([]);
++  const [loading, setLoading] = useState(false);
++  const [error, setError] = useState<string | null>(null);
++
++  useEffect(() => {
++    setLoading(true);
++    axios.get('/api/assets')
++      .then(res => setAssets(res.data))
++      .catch(err => setError(err.message))
++      .finally(() => setLoading(false));
++  }, []);
++
++  if (loading) return <div>Loading assets...</div>;
++  if (error) return <div>Error: {error}</div>;
++
++  return (
++    <div>
++      <h3>Assets</h3>
++      <ul>
++        {assets.map(a => (
++          <li key={a.id}>{a.name} - {a.status} {a.location ? `(${a.location})` : ''}</li>
++        ))}
++      </ul>
++    </div>
++  );
++};
++
++export default AssetsList;
+diff --git a/README.md b/README.md
+--- README.md
++++ README.md
+@@ -1,1 +1,50 @@
+-# HR
+\ No newline at end of file
++IMAP minimal scaffold
++
++Services:
++- services/asset-service: minimal Express-based asset service (port 4001)
++- services/api-gateway: simple proxy gateway (port 3000) forwarding /api/assets to asset-service
++- services/inventory-service: minimal inventory service (port 4002)
++- frontend/src/AssetsList.tsx: React component that fetches /api/assets
++
++Quick start (Windows cmd):
++
++cd services\asset-service
++npm install
++start "" npm run start
++
++# in a new terminal
++cd services\api-gateway
++npm install
++start "" npm run start
++
++# optional inventory
++cd services\inventory-service
++npm install
++start "" npm run start
++
++Frontend: integrate `frontend/src/AssetsList.tsx` into your React app and run the app with proxy pointing to http://localhost:3000 or run the frontend dev server and set a proxy in package.json.
++
++Inventory service (Prisma/Postgres)
++----------------------------------
++
++The `inventory-service` is implemented with NestJS + Prisma and expects a Postgres database (the root `docker-compose.yml` includes a `postgres` service that binds data to `C:\Users\Elite\.docker\postgres-data`).
++
++To run everything via Docker Compose:
++
++```cmd
++docker compose up --build
++```
++
++To run inventory migrations locally:
++
++```cmd
++cd services\inventory-service
++npm install
++npx prisma generate
++npx prisma migrate dev --name init
++npm run start
++```
++
++Deployment
++----------
++Use `deploy/deploy.sh` or the GitHub Actions workflow (`.github/workflows/deploy.yml`) to push the repo to a remote server and run `docker compose up -d --build` there. See `README_DEPLOY.md` for details.
+\ No newline at end of file
+diff --git a/services/api-gateway/src/main.ts b/services/api-gateway/src/main.ts
+new file mode 100644
+--- /dev/null
++++ b/services/api-gateway/src/main.ts
+@@ -0,0 +1,31 @@
++import { NestFactory } from '@nestjs/core';
++import { Module, Controller, Get, Req, Res, All } from '@nestjs/common';
++import { createProxyMiddleware } from 'http-proxy-middleware';
++import * as express from 'express';
++
++@Controller()
++class ProxyController {
++  @All('/api/*')
++  proxy(@Req() req: any, @Res() res: any) {
++    // This method is never called because proxy middleware handles routes.
++  }
++}
++
++@Module({
++  controllers: [ProxyController],
++})
++class AppModule {}
++
++async function bootstrap() {
++  const server = express();
++
++  // Mount proxy for assets
++  server.use('/api/assets', createProxyMiddleware({ target: 'http://localhost:4001', changeOrigin: true, pathRewrite: { '^/api/assets': '/assets' } }));
++
++  const app = await NestFactory.create(AppModule, new (await import('@nestjs/platform-express')).ExpressAdapter(server));
++  app.enableCors();
++  await app.listen(process.env.PORT || 3000);
++  console.log('api-gateway (Nest) listening on', process.env.PORT || 3000);
++}
++bootstrap();
+diff --git a/services/api-gateway/tsconfig.build.json b/services/api-gateway/tsconfig.build.json
+new file mode 100644
+--- /dev/null
++++ b/services/api-gateway/tsconfig.build.json
+@@ -0,0 +1,5 @@
++{
++  "extends": "./tsconfig.json",
++  "exclude": ["node_modules", "test", "dist"]
++}
+diff --git a/services/asset-service/Dockerfile b/services/asset-service/Dockerfile
+new file mode 100644
+--- /dev/null
++++ b/services/asset-service/Dockerfile
+@@ -0,0 +1,14 @@
++# Asset service Dockerfile
++FROM node:18-alpine
++WORKDIR /app
++
++# Install build deps
++COPY package.json package-lock.json* ./
++COPY tsconfig.json ./
++COPY src ./src
++
++RUN npm install --silent && npm run build
++
++EXPOSE 4001
++CMD ["node", "dist/index.js"]
+diff --git a/services/api-gateway/Dockerfile b/services/api-gateway/Dockerfile
+new file mode 100644
+--- /dev/null
++++ b/services/api-gateway/Dockerfile
+@@ -0,0 +1,11 @@
++# API Gateway (Nest minimal) Dockerfile
++FROM node:18-alpine
++WORKDIR /app
++COPY package.json package-lock.json* ./
++COPY tsconfig.json tsconfig.build.json ./
++COPY src ./src
++RUN npm install --silent && npm run build || true
++
++EXPOSE 3000
++CMD ["npx", "ts-node", "src/main.ts"]
+diff --git a/services/inventory-service/Dockerfile b/services/inventory-service/Dockerfile
+new file mode 100644
+--- /dev/null
++++ b/services/inventory-service/Dockerfile
+@@ -0,0 +1,17 @@
++# Inventory service Dockerfile
++FROM node:18-alpine
++WORKDIR /app
++COPY package.json package-lock.json* ./
++COPY tsconfig.json ./
++COPY prisma ./prisma
++COPY src ./src
++COPY .env ./
++
++RUN npm install --silent
++
++RUN npx prisma generate || true
++
++EXPOSE 4002
++
++CMD ["/bin/sh", "-c", "npx prisma migrate deploy || npx prisma migrate dev --name init && node dist/main.js"]
+diff --git a/docker-compose.yml b/docker-compose.yml
+new file mode 100644
+--- /dev/null
++++ b/docker-compose.yml
+@@ -0,0 +1,48 @@
++version: '3.8'
++services:
++  asset-service:
++    build: ./services/asset-service
++    ports:
++      - "4001:4001"
++    networks:
++      - imap-net
++  api-gateway:
++    build: ./services/api-gateway
++    ports:
++      - "3000:3000"
++    depends_on:
++      - asset-service
++    networks:
++      - imap-net
++  inventory-service:
++    build: ./services/inventory-service
++    ports:
++      - "4002:4002"
++    networks:
++      - imap-net
++    depends_on:
++      - postgres
++    depends_on:
++      - postgres
++
++postgres:
++  image: postgres:15-alpine
++  environment:
++    POSTGRES_USER: imap
++    POSTGRES_PASSWORD: imappass
++    POSTGRES_DB: imap_db
++  volumes:
++      - 'C:/Users/Elite/.docker/postgres-data:/var/lib/postgresql/data'
++  ports:
++    - "5432:5432"
++  networks:
++    - imap-net
++
++networks:
++  imap-net:
++    driver: bridge
++
++volumes:
++  # Uncomment to use a named volume for Postgres data instead of a host bind
++  # postgres-data: {}
+diff --git a/.dockerignore b/.dockerignore
+new file mode 100644
+--- /dev/null
++++ b/.dockerignore
+@@ -0,0 +1,6 @@
++node_modules
++dist
++npm-debug.log
++.env
++.DS_Store
+diff --git a/deploy/deploy.sh b/deploy/deploy.sh
+new file mode 100644
+--- /dev/null
++++ b/deploy/deploy.sh
+@@ -0,0 +1,30 @@
++#!/usr/bin/env bash
++# Simple deploy script using rsync + ssh to copy the repo to a remote server and run docker compose
++# Usage: ./deploy.sh <user@host> <remote_path> <ssh_key_path>
++
++set -euo pipefail
++
++if [ "$#" -lt 2 ]; then
++  echo "Usage: $0 user@host /remote/path [ssh_key]"
++  exit 1
++fi
++
++TARGET=$1
++REMOTE_PATH=$2
++SSH_KEY=${3:-}
++
++RSYNC_OPTS="-az --delete --exclude node_modules --exclude .git --exclude .env"
++if [ -n "$SSH_KEY" ]; then
++  SSH_CMD="ssh -i $SSH_KEY -o StrictHostKeyChecking=no"
++else
++  SSH_CMD="ssh -o StrictHostKeyChecking=no"
++fi
++
++echo "Syncing to $TARGET:$REMOTE_PATH"
++rsync $RSYNC_OPTS -e "$SSH_CMD" . $TARGET:$REMOTE_PATH
++
++echo "Running remote docker compose"
++$SSH_CMD $TARGET "cd $REMOTE_PATH && docker compose pull || true && docker compose up -d --build"
++
++echo "Deployment finished"
+diff --git a/.github/workflows/deploy.yml b/.github/workflows/deploy.yml
+new file mode 100644
+--- /dev/null
++++ b/.github/workflows/deploy.yml
+@@ -0,0 +1,33 @@
++name: Deploy to server
++
++on:
++  push:
++    branches:
++      - main
++
++jobs:
++  build-and-deploy:
++    runs-on: ubuntu-latest
++    steps:
++      - name: Checkout
++        uses: actions/checkout@v4
++
++      - name: Set up SSH
++        uses: webfactory/ssh-agent@v0.9.1
++        with:
++          ssh-private-key: ${{ secrets.DEPLOY_SSH_KEY }}
++
++      - name: Rsync files to server
++        env:
++          TARGET: ${{ secrets.DEPLOY_TARGET }}
++          REMOTE_PATH: ${{ secrets.DEPLOY_PATH }}
++        run: |
++          rsync -az --delete --exclude node_modules --exclude .git --exclude .env ./ $TARGET:$REMOTE_PATH
++
++      - name: Run docker compose on server
++        env:
++          TARGET: ${{ secrets.DEPLOY_TARGET }}
++          REMOTE_PATH: ${{ secrets.DEPLOY_PATH }}
++        run: |
++          ssh -o StrictHostKeyChecking=no $TARGET "cd $REMOTE_PATH && docker compose pull || true && docker compose up -d --build"
+diff --git a/README_DEPLOY.md b/README_DEPLOY.md
+new file mode 100644
+--- /dev/null
++++ b/README_DEPLOY.md
+@@ -0,0 +1,36 @@
++Deployment instructions
++
++Two ways to deploy the project to a remote Linux server that has Docker & Docker Compose installed:
++
++1) Manual using the provided script
++
++Prereqs on server:
++- Docker and Docker Compose installed
++- SSH access from your workstation
++
++From your workstation (Windows cmd / PowerShell):
++
++# Using an SSH key file
++bash deploy/deploy.sh user@your-server.com /home/user/imap-app ~/.ssh/id_rsa
++
++# Without explicit key (agent or default key)
++bash deploy/deploy.sh user@your-server.com /home/user/imap-app
++
++What the script does:
++- rsyncs the repo to the remote path (excludes node_modules, .git, .env)
++- runs `docker compose up -d --build` on the remote host
++
++2) Automated via GitHub Actions
++
++Set these repository secrets in GitHub:
++- DEPLOY_SSH_KEY: your private SSH key used to access the server
++- DEPLOY_TARGET: user@your-server.com
++- DEPLOY_PATH: /home/user/imap-app
++
++On push to `main`, the workflow `.github/workflows/deploy.yml` will run and rsync the repository then run docker compose on the remote host.
++
++Notes & troubleshooting
++- Ensure the user has permission to run docker commands on the server (add to `docker` group or use sudo in the workflow/script).
++- If Docker Compose v2 is available as `docker compose`, the workflow command uses `docker compose`. If your server only has `docker-compose`, edit `docker compose` -> `docker-compose` in `deploy/deploy.sh` and `.github/workflows/deploy.yml`.
++- If you prefer to keep persistent volumes on the host under `C:\Users\Elite\.docker`, modify `docker-compose.yml` to bind the volumes to that path before deploying.
+diff --git a/services/inventory-service/src/main.ts b/services/inventory-service/src/main.ts
+new file mode 100644
+--- /dev/null
++++ b/services/inventory-service/src/main.ts
+@@ -0,0 +1,11 @@
++import { NestFactory } from '@nestjs/core';
++import { AppModule } from './app.module';
++
++async function bootstrap() {
++  const app = await NestFactory.create(AppModule);
++  app.enableCors();
++  await app.listen(process.env.PORT || 4002);
++  console.log('inventory-service listening on', process.env.PORT || 4002);
++}
++bootstrap();
+diff --git a/services/inventory-service/src/app.module.ts b/services/inventory-service/src/app.module.ts
+new file mode 100644
+--- /dev/null
++++ b/services/inventory-service/src/app.module.ts
+@@ -0,0 +1,8 @@
++import { Module } from '@nestjs/common';
++import { InventoryModule } from './inventory/inventory.module';
++
++@Module({
++  imports: [InventoryModule],
++})
++export class AppModule {}
+diff --git a/services/inventory-service/src/inventory/inventory.module.ts b/services/inventory-service/src/inventory/inventory.module.ts
+new file mode 100644
+--- /dev/null
++++ b/services/inventory-service/src/inventory/inventory.module.ts
+@@ -0,0 +1,10 @@
++import { Module } from '@nestjs/common';
++import { InventoryService } from './inventory.service';
++import { InventoryController } from './inventory.controller';
++
++@Module({
++  controllers: [InventoryController],
++  providers: [InventoryService],
++})
++export class InventoryModule {}
+diff --git a/services/inventory-service/src/inventory/inventory.service.ts b/services/inventory-service/src/inventory/inventory.service.ts
+new file mode 100644
+--- /dev/null
++++ b/services/inventory-service/src/inventory/inventory.service.ts
+@@ -0,0 +1,24 @@
++import { Injectable, OnModuleDestroy } from '@nestjs/common';
++import { PrismaClient } from '@prisma/client';
++
++@Injectable()
++export class InventoryService implements OnModuleDestroy {
++  prisma = new PrismaClient();
++
++  async list() {
++    return this.prisma.inventoryItem.findMany();
++  }
++
++  async get(id: string) {
++    return this.prisma.inventoryItem.findUnique({ where: { id } });
++  }
++
++  async create(data: { name: string; quantity?: number; minLevel?: number }) {
++    return this.prisma.inventoryItem.create({ data });
++  }
++
++  async onModuleDestroy() {
++    await this.prisma.$disconnect();
++  }
++}
+diff --git a/services/inventory-service/src/inventory/inventory.controller.ts b/services/inventory-service/src/inventory/inventory.controller.ts
+new file mode 100644
+--- /dev/null
++++ b/services/inventory-service/src/inventory/inventory.controller.ts
+@@ -0,0 +1,26 @@
++import { Controller, Get, Post, Body, Param, HttpException, HttpStatus } from '@nestjs/common';
++import { InventoryService } from './inventory.service';
++
++@Controller('inventory')
++export class InventoryController {
++  constructor(private readonly svc: InventoryService) {}
++
++  @Get()
++  async list() {
++    return this.svc.list();
++  }
++
++  @Get(':id')
++  async get(@Param('id') id: string) {
++    const item = await this.svc.get(id);
++    if (!item) throw new HttpException('Not found', HttpStatus.NOT_FOUND);
++    return item;
++  }
++
++  @Post('items')
++  async create(@Body() body: any) {
++    if (!body.name) throw new HttpException('name required', HttpStatus.BAD_REQUEST);
++    return this.svc.create(body);
++  }
++}
+diff --git a/services/inventory-service/prisma/schema.prisma b/services/inventory-service/prisma/schema.prisma
+new file mode 100644
+--- /dev/null
++++ b/services/inventory-service/prisma/schema.prisma
+@@ -0,0 +1,17 @@
++generator client {
++  provider = "prisma-client-js"
++}
++
++datasource db {
++  provider = "postgresql"
++  url      = env("DATABASE_URL")
++}
++
++model InventoryItem {
++  id        String  @id @default(cuid())
++  name      String
++  quantity  Int     @default(0)
++  minLevel  Int?
++  createdAt DateTime @default(now())
++}
+diff --git a/services/inventory-service/.env b/services/inventory-service/.env
+new file mode 100644
+--- /dev/null
++++ b/services/inventory-service/.env
+@@ -0,0 +1,2 @@
++DATABASE_URL="postgresql://imap:imappass@postgres:5432/imap_db?schema=public"
+diff --git a/services/inventory-service/README.md b/services/inventory-service/README.md
+new file mode 100644
+--- /dev/null
++++ b/services/inventory-service/README.md
+@@ -0,0 +1,28 @@
++Inventory service (NestJS + Prisma)
++
++To run locally with Docker Compose (recommended):
++
++1. Ensure `postgres` service is enabled in the root `docker-compose.yml` and the host path `C:\\Users\\Elite\\.docker\\postgres-data` exists and is writable.
++2. From repo root:
++
++```bash
++docker compose up --build inventory-service postgres
++```
++
++Running migrations (locally inside container):
++
++```bash
++# open a shell inside the inventory-service container
++docker compose run --rm inventory-service sh -c "npx prisma migrate deploy"
++```
++
++Or run prisma migrate locally if you have prisma installed:
++
++```bash
++cd services/inventory-service
++npm install
++npx prisma generate
++npx prisma migrate dev --name init
++npm run start:dev
++```
